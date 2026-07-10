@@ -146,6 +146,13 @@
   td.mono, .mono { font-variant-numeric: tabular-nums; }
   td.serial { font-weight: 600; }
 
+  thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th.sortable:hover { color: var(--text-secondary); }
+  .sort-arrow { display: inline-block; width: 8px; font-size: 10px; color: var(--text-primary); }
+
   .badge {
     display: inline-flex;
     align-items: center;
@@ -254,7 +261,7 @@
         <th>Location</th>
         <th>Manufacture date</th>
         <th>Next hydrostatic test</th>
-        <th>Status</th>
+        <th id="statusHeader" class="sortable">Status <span class="sort-arrow" id="sortArrow"></span></th>
         <th></th>
       </tr>
     </thead>
@@ -294,8 +301,10 @@
 
 <script>
 const DUE_SOON_DAYS = 90;
+const STATUS_RANK = { critical: 0, warning: 1, good: 2 };
 let cylinders = [];
 let editingSerial = null; // null = add mode
+let statusSortDir = null; // null = unsorted, 'asc' = overdue first, 'desc' = ok first
 
 const tableBody = document.getElementById('tableBody');
 const kpiRow = document.getElementById('kpiRow');
@@ -306,6 +315,8 @@ const modalTitle = document.getElementById('modalTitle');
 const cylinderForm = document.getElementById('cylinderForm');
 const formError = document.getElementById('formError');
 const serialField = document.getElementById('f-serial');
+const statusHeader = document.getElementById('statusHeader');
+const sortArrow = document.getElementById('sortArrow');
 
 function daysUntil(dateStr) {
   const today = new Date();
@@ -338,8 +349,17 @@ async function loadCylinders() {
 function render() {
   const query = searchInput.value.trim().toLowerCase();
   const filtered = cylinders.filter(c =>
-    c.serial.toLowerCase().includes(query) || c.location.toLowerCase().includes(query)
+    c.serial.toLowerCase().includes(query) ||
+    c.location.toLowerCase().includes(query) ||
+    statusLabel(statusOf(c)).toLowerCase().includes(query)
   );
+
+  if (statusSortDir) {
+    const sign = statusSortDir === 'asc' ? 1 : -1;
+    filtered.sort((a, b) => sign * (STATUS_RANK[statusOf(a)] - STATUS_RANK[statusOf(b)]));
+  }
+
+  sortArrow.textContent = statusSortDir === 'asc' ? '↑' : statusSortDir === 'desc' ? '↓' : '';
 
   const counts = { good: 0, warning: 0, critical: 0 };
   for (const c of cylinders) counts[statusOf(c)]++;
@@ -414,6 +434,11 @@ document.getElementById('addBtn').addEventListener('click', () => openModal('add
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeModal(); });
 searchInput.addEventListener('input', render);
+
+statusHeader.addEventListener('click', () => {
+  statusSortDir = statusSortDir === 'asc' ? 'desc' : 'asc';
+  render();
+});
 
 tableBody.addEventListener('click', (e) => {
   const btn = e.target.closest('.row-edit');
