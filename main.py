@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import json
 from typing import Optional
@@ -7,15 +9,14 @@ filename = "logs.json"
 
 
 with open(filename, "r") as f:
-    list = json.load(f)
-
+    cylinders = json.load(f)
 
 
 class Bacylinder(BaseModel): # base model used for creating ba objects
-    serial: str = None
-    location: str = None
-    next_hydrostatic_date: str = None
-    manufacture_date: str = None
+    serial: str
+    location: str
+    next_hydrostatic_date: str
+    manufacture_date: str
 
 
 class BacylinderUpdate(BaseModel): #updater model for updating using patch
@@ -24,19 +25,29 @@ class BacylinderUpdate(BaseModel): #updater model for updating using patch
     next_hydrostatic_date: Optional[str] = None
     manufacture_date: Optional[str] = None
 
+
+def save():
+    with open(filename, "w") as f:
+        json.dump(cylinders, f, indent=4)
+
+
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.get("/")
 def root():
-    return list
+    return FileResponse("static/index.html")
 
 
-@app.post('/ba')
+@app.post('/ba', status_code=201)
 def createba(ba: Bacylinder):
-    list.append(ba.model_dump())
-    with open(filename, "w") as f:
-        json.dump(list, f, indent=4)
-    return list
+    if any(c["serial"] == ba.serial for c in cylinders):
+        raise HTTPException(400, f"Cylinder with serial {ba.serial} already exists")
+    cylinders.append(ba.model_dump())
+    save()
+    return ba.model_dump()
+
 
 @app.get('/ba')
 def getba(
@@ -46,44 +57,30 @@ def getba(
     manufacture_date: str = None,
     next_hydrostatic_date: str = None,
     ):
-    if item_id:
-        return list[item_id]
-    elif cylinder_serial:
-        for cylinder in list:
+    if item_id is not None:
+        if 0 <= item_id < len(cylinders):
+            return cylinders[item_id]
+        raise HTTPException(404, "Item not found")
+    if cylinder_serial:
+        for cylinder in cylinders:
             if cylinder["serial"] == cylinder_serial:
                 return cylinder
-            else: 
-                HTTPException(404, "Item not found")
-    elif location:
-        for cylinder in list:
-            if cylinder["location"] == location:
-                return cylinder
-            else:
-                HTTPException(404, "Item not found")
+        raise HTTPException(404, "Item not found")
+    if location:
+        result = [c for c in cylinders if c["location"] == location]
+        if result:
+            return result
+        raise HTTPException(404, "Item not found")
+    return cylinders
     #add manu date and hydro date
 
 
-@app.patch('/ba{serial}')
+@app.patch('/ba/{serial}')
 def updateba(serial: str, updatedba: BacylinderUpdate):
-    for ba in list:
+    for ba in cylinders:
         if ba["serial"] == serial:
-
-            ba_to_update: dict = ba # this is the dictionary containing serial, location etc inside of list
-            list.remove(ba)
-
-    update_data = updatedba.model_dump(exclude_unset = True) #this is the updated informatin in a dictionary
-    ba_to_update.update(update_data)
-    list.append(ba_to_update)
-    with open(filename, "w") as f:
-        json.dump(list, f, indent=4)
-    return list
-
-
-    
-
-    
-
-
-@app.get('/test')
-def gettest():
-    return f
+            update_data = updatedba.model_dump(exclude_unset=True)
+            ba.update(update_data)
+            save()
+            return ba
+    raise HTTPException(404, "Item not found")
