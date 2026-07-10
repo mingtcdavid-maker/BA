@@ -1,11 +1,5 @@
 [
     {
-        "serial": "BREB-1649",
-        "location": "PL231",
-        "next_hydrostatic_date": "2029-03-15",
-        "manufacture_date": "2019-03-15"
-    },
-    {
         "serial": "BREB-1650",
         "location": "PL232",
         "next_hydrostatic_date": "2030-07-21",
@@ -28,5 +22,11 @@
         "location": "PL231",
         "next_hydrostatic_date": "2032-09-14",
         "manufacture_date": "2022-09-14"
+    },
+    {
+        "serial": "BREB-1649",
+        "location": "PL232",
+        "next_hydrostatic_date": "2027-02-02",
+        "manufacture_date": "2019-03-15"
     }
 ]
