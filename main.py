@@ -17,6 +17,10 @@ class Bacylinder(BaseModel): # base model used for creating ba objects
     location: str
     next_hydrostatic_date: str
     manufacture_date: str
+    last_servicing_date: str
+    date_of_expiry: str
+    remarks: str
+
 
 
 class BacylinderUpdate(BaseModel): #updater model for updating using patch
@@ -24,6 +28,9 @@ class BacylinderUpdate(BaseModel): #updater model for updating using patch
     location: Optional[str] = None
     next_hydrostatic_date: Optional[str] = None
     manufacture_date: Optional[str] = None
+    last_servicing_date: Optional[str] = None
+    date_of_expiry: Optional[str] = None
+    remarks: Optional[str] = None
 
 
 def save():
@@ -56,6 +63,8 @@ def getba(
     location: str = None,
     manufacture_date: str = None,
     next_hydrostatic_date: str = None,
+    date_of_expiry: str = None,
+    last_servicing_date = None
     ):
     if item_id is not None:
         if 0 <= item_id < len(cylinders):
@@ -71,8 +80,29 @@ def getba(
         if result:
             return result
         raise HTTPException(404, "Item not found")
+    if manufacture_date:
+        result = [c for c in cylinder if c["manufacture_date"] == manufacture_date]
+        if result:
+            return result
+        raise HTTPException(404, "Item not found")
+    if next_hydrostatic_date:
+        result = [c for c in cylinder if c["next_hydrostatic_date"] == next_hydrostatic_date]
+        if result:
+            return result
+        raise HTTPException(404, "Item not found")
+    if last_servicing_date:
+        result = [c for c in cylinder if c["last_servicing_date"] == last_servicing_date]
+        if result:
+            return result
+        raise HTTPException(404, "Item not found")
+    if date_of_expiry:
+        result = [c for c in cylinder if c["date_of_expiry"] == date_of_expiry]
+        if result:
+            return result
+        raise HTTPException(404, "Item not found")
+
     return cylinders
-    #add manu date and hydro date
+    
 
 
 @app.patch('/ba/{serial}')
