@@ -32,7 +32,7 @@ def querytable(table_name: str, parameter_to_be_queried: str, parameter: str):
     c.execute(sql, (parameter,))
     row = c.fetchone()
     conn.close()
-    if row = None:
+    if row == None:
         return None
     return dict(row)
 
