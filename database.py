@@ -37,7 +37,9 @@ def querytable(table_name: str, parameter_to_be_queried: str, parameter: str):
     conn.close()
     if row == None:
         return None
-    return dict(row)
+    else:
+        cylinder = Bacylinder.model_validate(dict(row))
+        return cylinder
 
 def create_ba(table_name: str, ba_object: Bacylinder):
     conn = getconnection()

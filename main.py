@@ -6,23 +6,17 @@ import json
 from typing import Optional
 from models import BacylinderUpdate, Bacylinder
 from database import createbatable, querytable, create_ba, update_ba
+# collumns for sql table "logs" in logs.db
+# serial,
+# location,
+# next_hydrostatic_date,
+# last_servicing_date,
+# date_of_expiry,
+# manufacture_date,
+# remarks
 
 
-
-
-
-
-filename = "logs.json"
-
-
-with open(filename, "r") as f:
-    cylinders = json.load(f)
-
-
-
-def save():
-    with open(filename, "w") as f:
-        json.dump(cylinders, f, indent=4)
+TABLENAME = "logs" #currently hardcoding a table to be used, logs for all fastapi testing
 
 
 app = FastAPI()
@@ -35,14 +29,13 @@ def root():
 
 @app.post('/ba', status_code=201)
 def createba(ba: Bacylinder):
-    create_ba()
+    create_ba(TABLENAME, ba)
 
 
 
 
 @app.get('/ba')
 def getba(
-    item_id: int = None,
     cylinder_serial: str = None,
     location: str = None,
     manufacture_date: str = None,
@@ -50,51 +43,30 @@ def getba(
     date_of_expiry: str = None,
     last_servicing_date = None
     ):
-    if item_id is not None:
-        if 0 <= item_id < len(cylinders):
-            return cylinders[item_id]
-        raise HTTPException(404, "Item not found")
     if cylinder_serial:
-        for cylinder in cylinders:
-            if cylinder["serial"] == cylinder_serial:
-                return cylinder
-        raise HTTPException(404, "Item not found")
+        querytable(TABLENAME, "serial", cylinder_serial)
+        
     if location:
-        result = [c for c in cylinders if c["location"] == location]
-        if result:
-            return result
-        raise HTTPException(404, "Item not found")
-    if manufacture_date:
-        result = [c for c in cylinder if c["manufacture_date"] == manufacture_date]
-        if result:
-            return result
-        raise HTTPException(404, "Item not found")
-    if next_hydrostatic_date:
-        result = [c for c in cylinder if c["next_hydrostatic_date"] == next_hydrostatic_date]
-        if result:
-            return result
-        raise HTTPException(404, "Item not found")
-    if last_servicing_date:
-        result = [c for c in cylinder if c["last_servicing_date"] == last_servicing_date]
-        if result:
-            return result
-        raise HTTPException(404, "Item not found")
-    if date_of_expiry:
-        result = [c for c in cylinder if c["date_of_expiry"] == date_of_expiry]
-        if result:
-            return result
-        raise HTTPException(404, "Item not found")
+        querytable(TABLENAME, "location", location)
 
-    return cylinders
+    if manufacture_date:
+        querytable(TABLENAME, "manufacture_date", manufacture_date)
+
+    if next_hydrostatic_date:
+        querytable(TABLENAME, "next_hydrostatic_date", next_hydrostatic_date)
+
+    if date_of_expiry:
+        querytable(TABLENAME, "date_of_expiry", date_of_expiry)
+
+    if last_servicing_date:
+        querytable(TABLENAME, "last_servicing_date", last_servicing_date)
+
     
 
 
 @app.patch('/ba/{serial}')
 def updateba(serial: str, updatedba: BacylinderUpdate):
-    for ba in cylinders:
-        if ba["serial"] == serial:
-            update_data = updatedba.model_dump(exclude_unset=True)
-            ba.update(update_data)
-            save()
-            return ba
-    raise HTTPException(404, "Item not found")
+    update_ba(TABLENAME, updatedba, serial)
+
+
+
