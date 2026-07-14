@@ -1,0 +1,22 @@
+from pydantic import BaseModel
+from typing import Optional
+
+class Bacylinder(BaseModel): # base model used for creating ba objects
+    serial: str
+    location: str
+    next_hydrostatic_date: str
+    manufacture_date: str
+    last_servicing_date: str
+    date_of_expiry: str
+    remarks: str
+
+
+
+class BacylinderUpdate(BaseModel): #updater model for updating using patch
+    serial: Optional[str] = None
+    location: Optional[str] = None
+    next_hydrostatic_date: Optional[str] = None
+    manufacture_date: Optional[str] = None
+    last_servicing_date: Optional[str] = None
+    date_of_expiry: Optional[str] = None
+    remarks: Optional[str] = None
