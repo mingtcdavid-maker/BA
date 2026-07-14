@@ -1,7 +1,10 @@
 import sqlite3
 from models import Bacylinder, BacylinderUpdate
+import sys
 
 DATABASE = "logs.db" #constant name of the database file 
+
+
 
 def getconnection(): #creates the conn
     return sqlite3.connect(DATABASE)

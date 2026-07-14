@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import json
 from typing import Optional
 from models import BacylinderUpdate, Bacylinder
-
+from database import createbatable, querytable, create_ba, update_ba
 
 
 
@@ -28,7 +28,6 @@ def save():
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
 @app.get("/")
 def root():
     return FileResponse("static/index.html")
@@ -36,11 +35,9 @@ def root():
 
 @app.post('/ba', status_code=201)
 def createba(ba: Bacylinder):
-    if any(c["serial"] == ba.serial for c in cylinders):
-        raise HTTPException(400, f"Cylinder with serial {ba.serial} already exists")
-    cylinders.append(ba.model_dump())
-    save()
-    return ba.model_dump()
+    create_ba()
+
+
 
 
 @app.get('/ba')
