@@ -1,8 +1,7 @@
 import sqlite3
 from models import Bacylinder, BacylinderUpdate
-import sys
 
-DATABASE = "logs.db" #constant name of the database file 
+DATABASE = "logs.db" #constant name of the database file
 
 
 
@@ -27,6 +26,15 @@ def createbatable(table_name: str):
     conn.commit()
     conn.close()
 
+def list_ba(table_name: str):
+    conn = getconnection()
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM {table_name}")
+    rows = c.fetchall()
+    conn.close()
+    return [Bacylinder.model_validate(dict(row)) for row in rows]
+
 def querytable(table_name: str, parameter_to_be_queried: str, parameter: str):
     conn = getconnection()
     conn.row_factory = sqlite3.Row
@@ -40,6 +48,16 @@ def querytable(table_name: str, parameter_to_be_queried: str, parameter: str):
     else:
         cylinder = Bacylinder.model_validate(dict(row))
         return cylinder
+
+def query_all(table_name: str, parameter_to_be_queried: str, parameter: str):
+    conn = getconnection()
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    sql = f"SELECT * FROM {table_name} WHERE {parameter_to_be_queried} = ?"
+    c.execute(sql, (parameter,))
+    rows = c.fetchall()
+    conn.close()
+    return [Bacylinder.model_validate(dict(row)) for row in rows]
 
 def create_ba(table_name: str, ba_object: Bacylinder):
     conn = getconnection()
@@ -75,7 +93,7 @@ def create_ba(table_name: str, ba_object: Bacylinder):
 def update_ba(table_name: str, ba_update_object: BacylinderUpdate, serial: str):
     conn = getconnection()
     c = conn.cursor()
-    for key, value in ba_update_object.model_dump(exclude_none=True).items():
+    for key, value in ba_update_object.model_dump(exclude_unset=True).items():
         sql = f"UPDATE {table_name} SET {key} = ? WHERE serial = ?"
         c.execute(
             sql, (value, serial)

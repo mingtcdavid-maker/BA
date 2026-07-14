@@ -47,7 +47,7 @@
   }
   header h1 { font-size: 20px; margin: 0 0 2px; }
   header p { margin: 0; color: var(--text-secondary); font-size: 13px; }
-  main { padding: 20px 32px 48px; max-width: 1100px; margin: 0 auto; }
+  main { padding: 20px 32px 48px; max-width: 1300px; margin: 0 auto; }
 
   .kpi-row {
     display: grid;
@@ -116,15 +116,22 @@
     border-radius: 8px;
     padding: 9px 16px;
     font-size: 14px;
+    white-space: nowrap;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
   }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    background: var(--surface-1);
+  .table-scroll {
+    overflow-x: auto;
     border: 1px solid var(--border);
     border-radius: 10px;
-    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    background: var(--surface-1);
     font-size: 14px;
   }
   thead th {
@@ -145,6 +152,13 @@
   tbody tr:last-child td { border-bottom: none; }
   td.mono, .mono { font-variant-numeric: tabular-nums; }
   td.serial { font-weight: 600; }
+
+  thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th.sortable:hover { color: var(--text-secondary); }
+  .sort-arrow { display: inline-block; width: 8px; font-size: 10px; color: var(--text-primary); }
 
   .badge {
     display: inline-flex;
@@ -243,23 +257,29 @@
   <section class="kpi-row" id="kpiRow"></section>
 
   <div class="toolbar">
-    <input type="search" id="searchInput" placeholder="Search by serial or location…">
+    <input type="search" id="searchInput" placeholder="Search by serial, appliance, or status…">
+    <a class="btn-secondary" id="exportBtn" href="/export">Export to Excel</a>
     <button class="btn-primary" id="addBtn">+ Add cylinder</button>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Serial</th>
-        <th>Location</th>
-        <th>Manufacture date</th>
-        <th>Next hydrostatic test</th>
-        <th>Status</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Serial</th>
+          <th class="sortable" data-sort-key="location">Appliance <span class="sort-arrow" data-arrow-for="location"></span></th>
+          <th class="sortable" data-sort-key="manufacture_date">Manufacture date <span class="sort-arrow" data-arrow-for="manufacture_date"></span></th>
+          <th class="sortable" data-sort-key="next_hydrostatic_date">Next hydrostatic test <span class="sort-arrow" data-arrow-for="next_hydrostatic_date"></span></th>
+          <th class="sortable" data-sort-key="last_servicing_date">Last servicing date <span class="sort-arrow" data-arrow-for="last_servicing_date"></span></th>
+          <th class="sortable" data-sort-key="date_of_expiry">Date of expiry <span class="sort-arrow" data-arrow-for="date_of_expiry"></span></th>
+          <th>Remarks</th>
+          <th class="sortable" data-sort-key="status">Status <span class="sort-arrow" data-arrow-for="status"></span></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
   <div class="empty" id="emptyState" hidden>No cylinders match your search.</div>
 </main>
 
@@ -272,7 +292,7 @@
         <input id="f-serial" name="serial" required>
       </div>
       <div class="field">
-        <label for="f-location">Location</label>
+        <label for="f-location">Appliance</label>
         <input id="f-location" name="location" required>
       </div>
       <div class="field">
@@ -282,6 +302,18 @@
       <div class="field">
         <label for="f-hydro">Next hydrostatic test</label>
         <input id="f-hydro" name="next_hydrostatic_date" type="date" required>
+      </div>
+      <div class="field">
+        <label for="f-service">Last servicing date</label>
+        <input id="f-service" name="last_servicing_date" type="date" required>
+      </div>
+      <div class="field">
+        <label for="f-expiry">Date of expiry</label>
+        <input id="f-expiry" name="date_of_expiry" type="date" required>
+      </div>
+      <div class="field">
+        <label for="f-remarks">Remarks</label>
+        <input id="f-remarks" name="remarks">
       </div>
       <div class="form-error" id="formError"></div>
       <div class="modal-actions">
@@ -294,8 +326,14 @@
 
 <script>
 const DUE_SOON_DAYS = 90;
+const STATUS_RANK = { critical: 0, warning: 1, good: 2 };
+const APPLIANCE_ORDER = ['PL231', 'PL232', 'LF231E', 'CPL231', 'OST231', 'HSV231', 'FP231', 'FT231', 'Store Spares'];
+const DATE_COLUMNS = new Set(['manufacture_date', 'next_hydrostatic_date', 'last_servicing_date', 'date_of_expiry']);
+
 let cylinders = [];
 let editingSerial = null; // null = add mode
+let sortKey = null;   // null = unsorted, else one of: status, location, or a date column
+let sortDir = null;   // 'asc' | 'desc'
 
 const tableBody = document.getElementById('tableBody');
 const kpiRow = document.getElementById('kpiRow');
@@ -306,6 +344,7 @@ const modalTitle = document.getElementById('modalTitle');
 const cylinderForm = document.getElementById('cylinderForm');
 const formError = document.getElementById('formError');
 const serialField = document.getElementById('f-serial');
+const sortableHeaders = document.querySelectorAll('th.sortable');
 
 function daysUntil(dateStr) {
   const today = new Date();
@@ -329,6 +368,18 @@ function badgeHtml(status) {
   return `<span class="badge status-${status}"><span class="dot"></span>${statusLabel(status)}</span>`;
 }
 
+function applianceRank(location) {
+  const idx = APPLIANCE_ORDER.indexOf(location);
+  return idx === -1 ? APPLIANCE_ORDER.length : idx;
+}
+
+function sortValueOf(cylinder, key) {
+  if (key === 'status') return STATUS_RANK[statusOf(cylinder)];
+  if (key === 'location') return applianceRank(cylinder.location);
+  if (DATE_COLUMNS.has(key)) return cylinder[key] || ''; // ISO dates sort correctly as strings
+  return '';
+}
+
 async function loadCylinders() {
   const res = await fetch('/ba');
   cylinders = await res.json();
@@ -338,8 +389,30 @@ async function loadCylinders() {
 function render() {
   const query = searchInput.value.trim().toLowerCase();
   const filtered = cylinders.filter(c =>
-    c.serial.toLowerCase().includes(query) || c.location.toLowerCase().includes(query)
+    c.serial.toLowerCase().includes(query) ||
+    c.location.toLowerCase().includes(query) ||
+    statusLabel(statusOf(c)).toLowerCase().includes(query)
   );
+
+  if (sortKey) {
+    const sign = sortDir === 'asc' ? 1 : -1;
+    filtered.sort((a, b) => {
+      const va = sortValueOf(a, sortKey);
+      const vb = sortValueOf(b, sortKey);
+      if (va < vb) return -sign;
+      if (va > vb) return sign;
+      return 0;
+    });
+  }
+
+  sortableHeaders.forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (th.dataset.sortKey === sortKey) {
+      arrow.textContent = sortDir === 'asc' ? '↑' : '↓';
+    } else {
+      arrow.textContent = '';
+    }
+  });
 
   const counts = { good: 0, warning: 0, critical: 0 };
   for (const c of cylinders) counts[statusOf(c)]++;
@@ -369,8 +442,11 @@ function render() {
       <tr>
         <td class="serial">${escapeHtml(c.serial)}</td>
         <td>${escapeHtml(c.location)}</td>
-        <td class="mono">${escapeHtml(c.manufacture_date)}</td>
-        <td class="mono">${escapeHtml(c.next_hydrostatic_date)}</td>
+        <td class="mono">${escapeHtml(c.manufacture_date) || '—'}</td>
+        <td class="mono">${escapeHtml(c.next_hydrostatic_date) || '—'}</td>
+        <td class="mono">${escapeHtml(c.last_servicing_date) || '—'}</td>
+        <td class="mono">${escapeHtml(c.date_of_expiry) || '—'}</td>
+        <td>${escapeHtml(c.remarks) || '—'}</td>
         <td>${badgeHtml(status)}</td>
         <td><button class="row-edit" data-serial="${escapeHtml(c.serial)}">Edit</button></td>
       </tr>
@@ -397,6 +473,9 @@ function openModal(mode, cylinder) {
     document.getElementById('f-location').value = cylinder.location;
     document.getElementById('f-manufacture').value = cylinder.manufacture_date;
     document.getElementById('f-hydro').value = cylinder.next_hydrostatic_date;
+    document.getElementById('f-service').value = cylinder.last_servicing_date || '';
+    document.getElementById('f-expiry').value = cylinder.date_of_expiry || '';
+    document.getElementById('f-remarks').value = cylinder.remarks || '';
   } else {
     editingSerial = null;
     modalTitle.textContent = 'Add cylinder';
@@ -414,6 +493,15 @@ document.getElementById('addBtn').addEventListener('click', () => openModal('add
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeModal(); });
 searchInput.addEventListener('input', render);
+
+sortableHeaders.forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sortKey;
+    sortDir = (sortKey === key && sortDir === 'asc') ? 'desc' : 'asc';
+    sortKey = key;
+    render();
+  });
+});
 
 tableBody.addEventListener('click', (e) => {
   const btn = e.target.closest('.row-edit');
@@ -437,6 +525,9 @@ cylinderForm.addEventListener('submit', async (e) => {
           location: data.location,
           manufacture_date: data.manufacture_date,
           next_hydrostatic_date: data.next_hydrostatic_date,
+          last_servicing_date: data.last_servicing_date,
+          date_of_expiry: data.date_of_expiry,
+          remarks: data.remarks,
         }),
       });
     } else {
