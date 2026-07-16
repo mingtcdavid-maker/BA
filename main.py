@@ -3,8 +3,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openpyxl import Workbook
 from io import BytesIO
-from models import BacylinderUpdate, Bacylinder
-from database import createbatable, list_ba, querytable, query_all, create_ba, update_ba, creatependingba, getpending, acceptpending
+from models import BacylinderUpdate, Bacylinder, PendingRequestCreate
+from database import (
+    createbatable, list_ba, querytable, query_all, create_ba, update_ba,
+    creatependingtable, creatependingba, getpending, list_pending, acceptpending,
+)
 # collumns for sql table "logs" in logs.db
 # serial,
 # location,
@@ -22,6 +25,7 @@ PENDINGTABLE = "PENDING"
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 createbatable(TABLENAME)
+creatependingtable(PENDINGTABLE)
 
 @app.get("/")
 def root():
@@ -134,36 +138,46 @@ def updateba(serial: str, updatedba: BacylinderUpdate):
 #end
 
 #/mobile/cylinder to be used for the mobile app
-#use the get route /api/cylinder/{serial} for mobile get also
+#use the get route /api/cylinder?cylinder_serial={serial} for mobile get also
 
-@app.post('/mobile/cylinder/{serial}')
-def create_pending(serial:str, new_location:str):
-    try:
-        creatependingba(serial, new_location)
-        return "Successfully created pending reqeust"
-    except:
-        return "failed to create pending reqeust"
+@app.post('/mobile/cylinder/{serial}', status_code=201)
+def create_pending(serial: str, request: PendingRequestCreate):
+    if querytable(TABLENAME, "serial", serial) is None:
+        raise HTTPException(404, f"No cylinder with serial {serial}")
+    creatependingba(PENDINGTABLE, serial, request.location, request.remarks)
+    return {"serial": serial, "location": request.location, "remarks": request.remarks}
 
 
-#create a html for a mobile website
+#a tapped NFC tag opens a URL in the phone's browser, which is always a GET -
+#so the tag must land on this page, whose JS then POSTs to /mobile/cylinder/{serial}
+@app.get('/mobile/{serial}')
+def mobile_page(serial: str):
+    return FileResponse("static/mobile.html")
+
 @app.get('/mobile')
-def mobile():
-    ...
+def mobile_page_blank():
+    return FileResponse("static/mobile.html")
 #end
 
 
-#/api/updates for managing pending
+#/api/pending and /api/accept for managing pending requests on the dashboard
+
+@app.get('/api/pending')
+def get_all_pending():
+    return list_pending(PENDINGTABLE)
 
 @app.get('/api/pending/{serial}')
-def get_pending(serial:str):
+def get_pending(serial: str):
     result = getpending(PENDINGTABLE, serial)
     if result is None:
         raise HTTPException(404, "Item not found")
-    else: 
+    else:
         return result
-    
+
 
 @app.post('/api/accept/{serial}')
-def accept_pending(serial:str, status:bool):
-    acceptpending(serial, status) #if status True, accept, if status False, reject
-    
+def accept_pending(serial: str, status: bool):
+    result = acceptpending(TABLENAME, PENDINGTABLE, serial, status) #if status True, accept, if status False, reject
+    if result is None:
+        raise HTTPException(404, "No pending request for this serial")
+    return {"serial": serial, "accepted": status}

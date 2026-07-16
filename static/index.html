@@ -80,6 +80,44 @@
     color: var(--text-primary);
   }
 
+  .tab-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 4px;
+    margin-bottom: -1px;
+  }
+  .tab-btn.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+  }
+  .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: 999px;
+    background: var(--critical);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tab-count[hidden] { display: none; }
+
+  .view[hidden] { display: none; }
+
   .toolbar {
     display: flex;
     gap: 12px;
@@ -188,6 +226,19 @@
   }
   .row-edit:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 
+  .row-actions { display: flex; gap: 8px; }
+  .btn-accept, .btn-reject {
+    border-radius: 6px;
+    padding: 5px 11px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    background: transparent;
+  }
+  .btn-accept { color: var(--good); }
+  .btn-reject { color: var(--critical); }
+  .btn-accept:hover { background: color-mix(in srgb, var(--good) 12%, transparent); }
+  .btn-reject:hover { background: color-mix(in srgb, var(--critical) 12%, transparent); }
+
   .empty {
     text-align: center;
     padding: 40px;
@@ -254,33 +305,57 @@
 </header>
 
 <main>
-  <section class="kpi-row" id="kpiRow"></section>
-
-  <div class="toolbar">
-    <input type="search" id="searchInput" placeholder="Search by serial, appliance, or status…">
-    <a class="btn-secondary" id="exportBtn" href="/export">Export to Excel</a>
-    <button class="btn-primary" id="addBtn">+ Add cylinder</button>
+  <div class="tab-row">
+    <button class="tab-btn active" id="tabCylinders" data-view="cylinders">Cylinders</button>
+    <button class="tab-btn" id="tabPending" data-view="pending">Pending Requests <span class="tab-count" id="pendingCount" hidden>0</span></button>
   </div>
 
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Serial</th>
-          <th class="sortable" data-sort-key="location">Appliance <span class="sort-arrow" data-arrow-for="location"></span></th>
-          <th class="sortable" data-sort-key="manufacture_date">Manufacture date <span class="sort-arrow" data-arrow-for="manufacture_date"></span></th>
-          <th class="sortable" data-sort-key="next_hydrostatic_date">Next hydrostatic test <span class="sort-arrow" data-arrow-for="next_hydrostatic_date"></span></th>
-          <th class="sortable" data-sort-key="last_servicing_date">Last servicing date <span class="sort-arrow" data-arrow-for="last_servicing_date"></span></th>
-          <th class="sortable" data-sort-key="date_of_expiry">Date of expiry <span class="sort-arrow" data-arrow-for="date_of_expiry"></span></th>
-          <th>Remarks</th>
-          <th class="sortable" data-sort-key="status">Status <span class="sort-arrow" data-arrow-for="status"></span></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-  </div>
-  <div class="empty" id="emptyState" hidden>No cylinders match your search.</div>
+  <section class="view" id="cylindersView">
+    <section class="kpi-row" id="kpiRow"></section>
+
+    <div class="toolbar">
+      <input type="search" id="searchInput" placeholder="Search by serial, appliance, or status…">
+      <a class="btn-secondary" id="exportBtn" href="/export">Export to Excel</a>
+      <button class="btn-primary" id="addBtn">+ Add cylinder</button>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Serial</th>
+            <th class="sortable" data-sort-key="location">Appliance <span class="sort-arrow" data-arrow-for="location"></span></th>
+            <th class="sortable" data-sort-key="manufacture_date">Manufacture date <span class="sort-arrow" data-arrow-for="manufacture_date"></span></th>
+            <th class="sortable" data-sort-key="next_hydrostatic_date">Next hydrostatic test <span class="sort-arrow" data-arrow-for="next_hydrostatic_date"></span></th>
+            <th class="sortable" data-sort-key="last_servicing_date">Last servicing date <span class="sort-arrow" data-arrow-for="last_servicing_date"></span></th>
+            <th class="sortable" data-sort-key="date_of_expiry">Date of expiry <span class="sort-arrow" data-arrow-for="date_of_expiry"></span></th>
+            <th>Remarks</th>
+            <th class="sortable" data-sort-key="status">Status <span class="sort-arrow" data-arrow-for="status"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyState" hidden>No cylinders match your search.</div>
+  </section>
+
+  <section class="view" id="pendingView" hidden>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Serial</th>
+            <th>Requested appliance</th>
+            <th>Remarks</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pendingBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="pendingEmptyState" hidden>No pending requests.</div>
+  </section>
 </main>
 
 <div class="modal-backdrop" id="modalBackdrop" hidden>
@@ -345,6 +420,13 @@ const cylinderForm = document.getElementById('cylinderForm');
 const formError = document.getElementById('formError');
 const serialField = document.getElementById('f-serial');
 const sortableHeaders = document.querySelectorAll('th.sortable');
+const pendingBody = document.getElementById('pendingBody');
+const pendingEmptyState = document.getElementById('pendingEmptyState');
+const pendingCount = document.getElementById('pendingCount');
+const tabCylinders = document.getElementById('tabCylinders');
+const tabPending = document.getElementById('tabPending');
+const cylindersView = document.getElementById('cylindersView');
+const pendingView = document.getElementById('pendingView');
 
 function daysUntil(dateStr) {
   const today = new Date();
@@ -381,9 +463,42 @@ function sortValueOf(cylinder, key) {
 }
 
 async function loadCylinders() {
-  const res = await fetch('/ba');
+  const res = await fetch('/api/cylinder');
   cylinders = await res.json();
   render();
+}
+
+async function loadPending() {
+  const res = await fetch('/api/pending');
+  const pending = await res.json();
+
+  pendingCount.textContent = pending.length;
+  pendingCount.hidden = pending.length === 0;
+
+  pendingBody.innerHTML = pending.map(p => `
+    <tr>
+      <td class="serial">${escapeHtml(p.serial)}</td>
+      <td>${escapeHtml(p.location)}</td>
+      <td>${escapeHtml(p.remarks) || '—'}</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn-accept" data-serial="${escapeHtml(p.serial)}" data-action="accept">Accept</button>
+          <button class="btn-reject" data-serial="${escapeHtml(p.serial)}" data-action="reject">Reject</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  pendingEmptyState.hidden = pending.length !== 0;
+}
+
+function switchView(view) {
+  const showPending = view === 'pending';
+  cylindersView.hidden = showPending;
+  pendingView.hidden = !showPending;
+  tabCylinders.classList.toggle('active', !showPending);
+  tabPending.classList.toggle('active', showPending);
+  if (showPending) loadPending();
 }
 
 function render() {
@@ -510,6 +625,30 @@ tableBody.addEventListener('click', (e) => {
   if (cylinder) openModal('edit', cylinder);
 });
 
+tabCylinders.addEventListener('click', () => switchView('cylinders'));
+tabPending.addEventListener('click', () => switchView('pending'));
+
+pendingBody.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  btn.disabled = true;
+  const accepted = btn.dataset.action === 'accept';
+  try {
+    const res = await fetch(`/api/accept/${encodeURIComponent(btn.dataset.serial)}?status=${accepted}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Request failed (${res.status})`);
+    }
+    await loadPending();
+    if (accepted) await loadCylinders(); // location may have changed
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+  }
+});
+
 cylinderForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   formError.textContent = '';
@@ -518,7 +657,7 @@ cylinderForm.addEventListener('submit', async (e) => {
   try {
     let res;
     if (editingSerial) {
-      res = await fetch(`/ba/${encodeURIComponent(editingSerial)}`, {
+      res = await fetch(`/api/cylinder/${encodeURIComponent(editingSerial)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -531,7 +670,7 @@ cylinderForm.addEventListener('submit', async (e) => {
         }),
       });
     } else {
-      res = await fetch('/ba', {
+      res = await fetch('/api/cylinder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -549,6 +688,7 @@ cylinderForm.addEventListener('submit', async (e) => {
 });
 
 loadCylinders();
+loadPending(); // populates the tab badge even before the tab is opened
 </script>
 </body>
 </html>

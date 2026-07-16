@@ -20,3 +20,8 @@ class BacylinderUpdate(BaseModel): #updater model for updating using patch
     last_servicing_date: Optional[str] = None
     date_of_expiry: Optional[str] = None
     remarks: Optional[str] = None
+
+
+class PendingRequestCreate(BaseModel): # body for /mobile/cylinder/{serial}
+    location: str
+    remarks: Optional[str] = None

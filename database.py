@@ -1,6 +1,5 @@
 import sqlite3
 from models import Bacylinder, BacylinderUpdate
-import json
 
 DATABASE = "logs.db" #constant name of the database file
 
@@ -9,7 +8,7 @@ DATABASE = "logs.db" #constant name of the database file
 def getconnection(): #creates the conn
     return sqlite3.connect(DATABASE)
 
-def createbatable(table_name: str): 
+def createbatable(table_name: str):
     conn = getconnection()
     c=conn.cursor()
     sql = f"""
@@ -64,7 +63,7 @@ def create_ba(table_name: str, ba_object: Bacylinder):
     conn = getconnection()
     c=conn.cursor()
     sql = f"""
-    INSERT INTO {table_name} 
+    INSERT INTO {table_name}
     (
     serial,
     location,
@@ -73,7 +72,7 @@ def create_ba(table_name: str, ba_object: Bacylinder):
     date_of_expiry,
     manufacture_date,
     remarks
-    ) 
+    )
     VALUES (?, ?, ?, ?, ?, ?, ?)
     """
     c.execute(
@@ -87,7 +86,7 @@ def create_ba(table_name: str, ba_object: Bacylinder):
             ba_object.manufacture_date,
             ba_object.remarks
         )
-    )  
+    )
     conn.commit()
     conn.close()
 
@@ -99,68 +98,73 @@ def update_ba(table_name: str, ba_update_object: BacylinderUpdate, serial: str):
         c.execute(
             sql, (value, serial)
         )
-        
+
     conn.commit()
     conn.close()
 
 
-
-
-def creatependingba(serial:str, new_location: str):
+def creatependingtable(table_name: str):
     conn = getconnection()
     c = conn.cursor()
     sql = f"""
-    INSERT INTO PENDING 
-    (
-    serial,
-    location
+    CREATE TABLE IF NOT EXISTS {table_name} (
+    serial text PRIMARY KEY,
+    location text,
+    remarks text
     )
-    VALUES (?, ?)
     """
-    c.execute(sql, (serial, new_location))
+    c.execute(sql)
     conn.commit()
     conn.close()
-    
 
-def getpending(tablename: str, serial:str):
+def list_pending(table_name: str):
+    conn = getconnection()
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM {table_name}")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def creatependingba(table_name: str, serial: str, new_location: str, remarks: str = None):
+    conn = getconnection()
+    c = conn.cursor()
+    #re-scanning the same tag replaces its previous pending request rather than erroring
+    sql = f"""
+    INSERT INTO {table_name} (serial, location, remarks)
+    VALUES (?, ?, ?)
+    ON CONFLICT(serial) DO UPDATE SET location = excluded.location, remarks = excluded.remarks
+    """
+    c.execute(sql, (serial, new_location, remarks))
+    conn.commit()
+    conn.close()
+
+def getpending(table_name: str, serial:str):
     conn = getconnection()
     conn.row_factory = sqlite3.Row
     c=conn.cursor()
-    sql = f"SELECT * FROM {tablename} WHERE serial = ?"
+    sql = f"SELECT * FROM {table_name} WHERE serial = ?"
     c.execute(sql, (serial,))
     row = c.fetchone()
     conn.close()
     if row == None:
         return None
     else:
-        return json.dump(dict(row))
-        
+        return dict(row)
 
-def acceptpending(serial, status):
+def acceptpending(cylinder_table: str, pending_table: str, serial: str, status: bool):
     conn = getconnection()
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    if status:
-        pending = getpending("PENDING", serial)
-        pending_dict = json.load(pending)
-        pendingserial = pending_dict["serial"]
-        pendinglocation = pending_dict["location"]
-        pendingba = BacylinderUpdate(pendingserial, pendinglocation)
-        update_ba("logs", pendingba, serial)
-        c.execute(
-        "DELETE FROM PENDING WHERE serial = ?",
-        (serial,)
-        )
-        conn.commit()
+    c.execute(f"SELECT * FROM {pending_table} WHERE serial = ?", (serial,))
+    row = c.fetchone()
+    if row is None:
         conn.close()
         return None
-    else:
-        c.execute(
-        "DELETE FROM PENDING WHERE serial = ?",
-        (serial,)
-        )
-        conn.commit()
-        conn.close()
-        return None
-
-
-    
+    pending = dict(row)
+    if status: #accept: apply the requested location to the cylinder
+        c.execute(f"UPDATE {cylinder_table} SET location = ? WHERE serial = ?", (pending["location"], serial))
+    c.execute(f"DELETE FROM {pending_table} WHERE serial = ?", (serial,))
+    conn.commit()
+    conn.close()
+    return pending
