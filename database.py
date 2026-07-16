@@ -1,5 +1,6 @@
 import sqlite3
 from models import Bacylinder, BacylinderUpdate
+import json
 
 DATABASE = "logs.db" #constant name of the database file
 
@@ -103,3 +104,63 @@ def update_ba(table_name: str, ba_update_object: BacylinderUpdate, serial: str):
     conn.close()
 
 
+
+
+def creatependingba(serial:str, new_location: str):
+    conn = getconnection()
+    c = conn.cursor()
+    sql = f"""
+    INSERT INTO PENDING 
+    (
+    serial,
+    location
+    )
+    VALUES (?, ?)
+    """
+    c.execute(sql, (serial, new_location))
+    conn.commit()
+    conn.close()
+    
+
+def getpending(tablename: str, serial:str):
+    conn = getconnection()
+    conn.row_factory = sqlite3.Row
+    c=conn.cursor()
+    sql = f"SELECT * FROM {tablename} WHERE serial = ?"
+    c.execute(sql, (serial,))
+    row = c.fetchone()
+    conn.close()
+    if row == None:
+        return None
+    else:
+        return json.dump(dict(row))
+        
+
+def acceptpending(serial, status):
+    conn = getconnection()
+    c = conn.cursor()
+    if status:
+        pending = getpending("PENDING", serial)
+        pending_dict = json.load(pending)
+        pendingserial = pending_dict["serial"]
+        pendinglocation = pending_dict["location"]
+        pendingba = BacylinderUpdate(pendingserial, pendinglocation)
+        update_ba("logs", pendingba, serial)
+        c.execute(
+        "DELETE FROM PENDING WHERE serial = ?",
+        (serial,)
+        )
+        conn.commit()
+        conn.close()
+        return None
+    else:
+        c.execute(
+        "DELETE FROM PENDING WHERE serial = ?",
+        (serial,)
+        )
+        conn.commit()
+        conn.close()
+        return None
+
+
+    

@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from openpyxl import Workbook
 from io import BytesIO
 from models import BacylinderUpdate, Bacylinder
-from database import createbatable, list_ba, querytable, query_all, create_ba, update_ba
+from database import createbatable, list_ba, querytable, query_all, create_ba, update_ba, creatependingba, getpending, acceptpending
 # collumns for sql table "logs" in logs.db
 # serial,
 # location,
@@ -16,8 +16,9 @@ from database import createbatable, list_ba, querytable, query_all, create_ba, u
 
 
 TABLENAME = "logs" #currently hardcoding a table to be used, logs for all fastapi testing
+PENDINGTABLE = "PENDING"
 
-
+#/api/cylinder to be used for ba dashboard
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 createbatable(TABLENAME)
@@ -27,7 +28,7 @@ def root():
     return FileResponse("static/index.html")
 
 
-@app.post('/ba', status_code=201)
+@app.post('/api/cylinder', status_code=201)
 def createba(ba: Bacylinder):
     if querytable(TABLENAME, "serial", ba.serial) is not None:
         raise HTTPException(400, f"Cylinder with serial {ba.serial} already exists")
@@ -35,7 +36,7 @@ def createba(ba: Bacylinder):
     return ba
 
 
-@app.get('/ba')
+@app.get('/api/cylinder')
 def getba(
     cylinder_serial: str = None,
     location: str = None,
@@ -122,9 +123,47 @@ def export_excel():
     )
 
 
-@app.patch('/ba/{serial}')
+@app.patch('/api/cylinder/{serial}')
 def updateba(serial: str, updatedba: BacylinderUpdate):
     if querytable(TABLENAME, "serial", serial) is None:
         raise HTTPException(404, "Item not found")
     update_ba(TABLENAME, updatedba, serial)
     return querytable(TABLENAME, "serial", serial)
+
+
+#end
+
+#/mobile/cylinder to be used for the mobile app
+#use the get route /api/cylinder/{serial} for mobile get also
+
+@app.post('/mobile/cylinder/{serial}')
+def create_pending(serial:str, new_location:str):
+    try:
+        creatependingba(serial, new_location)
+        return "Successfully created pending reqeust"
+    except:
+        return "failed to create pending reqeust"
+
+
+#create a html for a mobile website
+@app.get('/mobile')
+def mobile():
+    ...
+#end
+
+
+#/api/updates for managing pending
+
+@app.get('/api/pending/{serial}')
+def get_pending(serial:str):
+    result = getpending(PENDINGTABLE, serial)
+    if result is None:
+        raise HTTPException(404, "Item not found")
+    else: 
+        return result
+    
+
+@app.post('/api/accept/{serial}')
+def accept_pending(serial:str, status:bool):
+    acceptpending(serial, status) #if status True, accept, if status False, reject
+    
