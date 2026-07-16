@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BA Cylinder Update</title>
+<style>
+  :root {
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --border:         rgba(11,11,11,0.10);
+    --good:           #0ca30c;
+    --critical:       #d03b3b;
+    --accent:         #2a78d6;
+    --accent-ink:     #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --border:         rgba(255,255,255,0.10);
+      --good:           #0ca30c;
+      --critical:       #e66767;
+      --accent:         #3987e5;
+      --accent-ink:     #0b0b0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 24px 20px 48px;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .card .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    font-size: 14px;
+  }
+  .card .row + .row { border-top: 1px solid var(--border); }
+  .card .row .k { color: var(--text-secondary); }
+  .card .row .v { font-weight: 600; text-align: right; }
+
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .field select, .field input, .field textarea {
+    width: 100%;
+    padding: 12px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-family: inherit;
+  }
+  .field textarea { resize: vertical; min-height: 70px; }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .btn-primary:disabled { opacity: 0.6; }
+  .btn-secondary {
+    width: 100%;
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 15px;
+    margin-top: 10px;
+  }
+
+  .status-msg { font-size: 14px; margin: 10px 0; min-height: 18px; }
+  .status-msg.error { color: var(--critical); }
+  .status-msg.success { color: var(--good); }
+
+  .center-icon { font-size: 40px; text-align: center; margin-bottom: 8px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>BA Cylinder Location Update</h1>
+  <p class="subtitle">Scanned via NFC tag</p>
+
+  <!-- shown if the URL had no serial (e.g. /mobile on its own) -->
+  <section id="lookupSection" hidden>
+    <div class="card">
+      <div class="field">
+        <label for="lookupSerial">Cylinder serial</label>
+        <input id="lookupSerial" placeholder="e.g. BREB-1650" autocapitalize="characters">
+      </div>
+      <button class="btn-primary" id="lookupBtn">Look up</button>
+    </div>
+    <p class="status-msg error" id="lookupError"></p>
+  </section>
+
+  <!-- shown while fetching cylinder info -->
+  <section id="loadingSection" hidden>
+    <p class="subtitle">Loading cylinder…</p>
+  </section>
+
+  <!-- shown if the serial doesn't match a registered cylinder -->
+  <section id="notFoundSection" hidden>
+    <div class="center-icon">⚠️</div>
+    <p class="status-msg error" style="text-align:center">No cylinder found with serial "<span id="notFoundSerial"></span>". Check the tag or contact the dashboard admin.</p>
+  </section>
+
+  <!-- main form: shown once the cylinder is loaded -->
+  <section id="formSection" hidden>
+    <div class="card">
+      <div class="row"><span class="k">Serial</span><span class="v" id="infoSerial"></span></div>
+      <div class="row"><span class="k">Current appliance</span><span class="v" id="infoLocation"></span></div>
+      <div class="row"><span class="k">Next hydrostatic test</span><span class="v" id="infoHydro"></span></div>
+    </div>
+
+    <form id="requestForm">
+      <div class="field">
+        <label for="newLocation">New appliance</label>
+        <select id="newLocation" required>
+          <option value="PL231">PL231</option>
+          <option value="PL232">PL232</option>
+          <option value="LF231E">LF231E</option>
+          <option value="CPL231">CPL231</option>
+          <option value="OST231">OST231</option>
+          <option value="HSV231">HSV231</option>
+          <option value="FP231">FP231</option>
+          <option value="FT231">FT231</option>
+          <option value="Store Spares">Store Spares</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="remarks">Remarks (optional)</label>
+        <textarea id="remarks" placeholder="e.g. moved after refill"></textarea>
+      </div>
+      <p class="status-msg error" id="formError"></p>
+      <button class="btn-primary" type="submit" id="submitBtn">Submit request</button>
+    </form>
+  </section>
+
+  <!-- shown after a successful submission -->
+  <section id="doneSection" hidden>
+    <div class="center-icon">✅</div>
+    <p class="status-msg success" style="text-align:center">Request submitted — awaiting approval on the dashboard.</p>
+    <button class="btn-secondary" id="anotherBtn">Submit another update</button>
+  </section>
+</main>
+
+<script>
+const lookupSection = document.getElementById('lookupSection');
+const lookupSerial = document.getElementById('lookupSerial');
+const lookupBtn = document.getElementById('lookupBtn');
+const lookupError = document.getElementById('lookupError');
+const loadingSection = document.getElementById('loadingSection');
+const notFoundSection = document.getElementById('notFoundSection');
+const notFoundSerial = document.getElementById('notFoundSerial');
+const formSection = document.getElementById('formSection');
+const doneSection = document.getElementById('doneSection');
+const requestForm = document.getElementById('requestForm');
+const formError = document.getElementById('formError');
+const submitBtn = document.getElementById('submitBtn');
+const anotherBtn = document.getElementById('anotherBtn');
+
+let currentSerial = null;
+
+function showOnly(section) {
+  [lookupSection, loadingSection, notFoundSection, formSection, doneSection].forEach(s => {
+    s.hidden = s !== section;
+  });
+}
+
+function serialFromPath() {
+  // path is either "/mobile" or "/mobile/<serial>"
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  return parts.length > 1 ? decodeURIComponent(parts[1]) : null;
+}
+
+async function loadCylinder(serial) {
+  currentSerial = serial;
+  showOnly(loadingSection);
+  try {
+    const res = await fetch(`/api/cylinder?cylinder_serial=${encodeURIComponent(serial)}`);
+    if (!res.ok) {
+      notFoundSerial.textContent = serial;
+      showOnly(notFoundSection);
+      return;
+    }
+    const cylinder = await res.json();
+    document.getElementById('infoSerial').textContent = cylinder.serial;
+    document.getElementById('infoLocation').textContent = cylinder.location;
+    document.getElementById('infoHydro').textContent = cylinder.next_hydrostatic_date || '—';
+    document.getElementById('newLocation').value = cylinder.location;
+    showOnly(formSection);
+  } catch (err) {
+    notFoundSerial.textContent = serial;
+    showOnly(notFoundSection);
+  }
+}
+
+lookupBtn.addEventListener('click', () => {
+  const serial = lookupSerial.value.trim();
+  lookupError.textContent = '';
+  if (!serial) {
+    lookupError.textContent = 'Enter a cylinder serial.';
+    return;
+  }
+  loadCylinder(serial);
+});
+
+requestForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  formError.textContent = '';
+  submitBtn.disabled = true;
+  try {
+    const res = await fetch(`/mobile/cylinder/${encodeURIComponent(currentSerial)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: document.getElementById('newLocation').value,
+        remarks: document.getElementById('remarks').value || null,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Request failed (${res.status})`);
+    }
+    showOnly(doneSection);
+  } catch (err) {
+    formError.textContent = err.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+anotherBtn.addEventListener('click', () => {
+  requestForm.reset();
+  showOnly(lookupSection);
+  lookupSerial.value = '';
+  lookupError.textContent = '';
+});
+
+const initialSerial = serialFromPath();
+if (initialSerial) {
+  loadCylinder(initialSerial);
+} else {
+  showOnly(lookupSection);
+}
+</script>
+</body>
+</html>
