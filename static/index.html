@@ -216,7 +216,7 @@
   .badge.status-critical .dot { background: var(--critical); }
   .badge .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 
-  .row-edit {
+  .row-edit, .row-delete {
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -225,6 +225,10 @@
     color: var(--text-secondary);
   }
   .row-edit:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+  .row-delete { color: var(--critical); }
+  .row-delete:hover { background: color-mix(in srgb, var(--critical) 12%, transparent); border-color: var(--critical); }
+
+  .modal.modal-danger .btn-primary { background: var(--critical); }
 
   .row-actions { display: flex; gap: 8px; }
   .btn-accept, .btn-reject {
@@ -399,6 +403,20 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="deleteModalBackdrop" hidden>
+  <div class="modal modal-danger">
+    <h2>Delete cylinder?</h2>
+    <p style="color: var(--text-secondary); font-size: 14px; margin: 0 0 4px;">
+      This will permanently delete <strong id="deleteModalSerial"></strong> and any pending NFC request for it. This can't be undone.
+    </p>
+    <p class="form-error" id="deleteError"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="deleteCancelBtn">Cancel</button>
+      <button type="button" class="btn-primary" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const DUE_SOON_DAYS = 90;
 const STATUS_RANK = { critical: 0, warning: 1, good: 2 };
@@ -420,6 +438,11 @@ const cylinderForm = document.getElementById('cylinderForm');
 const formError = document.getElementById('formError');
 const serialField = document.getElementById('f-serial');
 const sortableHeaders = document.querySelectorAll('th.sortable');
+const deleteModalBackdrop = document.getElementById('deleteModalBackdrop');
+const deleteModalSerial = document.getElementById('deleteModalSerial');
+const deleteError = document.getElementById('deleteError');
+const deleteConfirmBtn = document.getElementById('deleteConfirmBtn');
+let serialPendingDelete = null;
 const pendingBody = document.getElementById('pendingBody');
 const pendingEmptyState = document.getElementById('pendingEmptyState');
 const pendingCount = document.getElementById('pendingCount');
@@ -563,7 +586,12 @@ function render() {
         <td class="mono">${escapeHtml(c.date_of_expiry) || '—'}</td>
         <td>${escapeHtml(c.remarks) || '—'}</td>
         <td>${badgeHtml(status)}</td>
-        <td><button class="row-edit" data-serial="${escapeHtml(c.serial)}">Edit</button></td>
+        <td>
+          <div class="row-actions">
+            <button class="row-edit" data-serial="${escapeHtml(c.serial)}">Edit</button>
+            <button class="row-delete" data-serial="${escapeHtml(c.serial)}">Delete</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join('');
@@ -604,6 +632,18 @@ function closeModal() {
   modalBackdrop.hidden = true;
 }
 
+function openDeleteModal(serial) {
+  serialPendingDelete = serial;
+  deleteError.textContent = '';
+  deleteModalSerial.textContent = serial;
+  deleteModalBackdrop.hidden = false;
+}
+
+function closeDeleteModal() {
+  deleteModalBackdrop.hidden = true;
+  serialPendingDelete = null;
+}
+
 document.getElementById('addBtn').addEventListener('click', () => openModal('add'));
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeModal(); });
@@ -619,10 +659,38 @@ sortableHeaders.forEach(th => {
 });
 
 tableBody.addEventListener('click', (e) => {
-  const btn = e.target.closest('.row-edit');
-  if (!btn) return;
-  const cylinder = cylinders.find(c => c.serial === btn.dataset.serial);
-  if (cylinder) openModal('edit', cylinder);
+  const editBtn = e.target.closest('.row-edit');
+  if (editBtn) {
+    const cylinder = cylinders.find(c => c.serial === editBtn.dataset.serial);
+    if (cylinder) openModal('edit', cylinder);
+    return;
+  }
+  const deleteBtn = e.target.closest('.row-delete');
+  if (deleteBtn) {
+    openDeleteModal(deleteBtn.dataset.serial);
+  }
+});
+
+document.getElementById('deleteCancelBtn').addEventListener('click', closeDeleteModal);
+deleteModalBackdrop.addEventListener('click', (e) => { if (e.target === deleteModalBackdrop) closeDeleteModal(); });
+
+deleteConfirmBtn.addEventListener('click', async () => {
+  deleteError.textContent = '';
+  deleteConfirmBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/cylinder/${encodeURIComponent(serialPendingDelete)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Request failed (${res.status})`);
+    }
+    closeDeleteModal();
+    await loadCylinders();
+    await loadPending(); // in case the deleted cylinder had a pending request
+  } catch (err) {
+    deleteError.textContent = err.message;
+  } finally {
+    deleteConfirmBtn.disabled = false;
+  }
 });
 
 tabCylinders.addEventListener('click', () => switchView('cylinders'));
