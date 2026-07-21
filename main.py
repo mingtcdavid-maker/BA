@@ -6,7 +6,7 @@ from io import BytesIO
 from models import BacylinderUpdate, Bacylinder, PendingRequestCreate
 from database import (
     createbatable, list_ba, querytable, query_all, create_ba, update_ba,
-    creatependingtable, creatependingba, getpending, list_pending, acceptpending,
+    creatependingtable, creatependingba, getpending, list_pending, acceptpending, delete_ba
 )
 # collumns for sql table "logs" in logs.db
 # serial,
@@ -134,6 +134,12 @@ def updateba(serial: str, updatedba: BacylinderUpdate):
     update_ba(TABLENAME, updatedba, serial)
     return querytable(TABLENAME, "serial", serial)
 
+@app.delete('/api/cylinder/{serial}')
+def deleteba(serial:str):
+   if querytable(TABLENAME, "serial", serial) is None:
+       raise HTTPException(404, "Item not found")
+   delete_ba(TABLENAME, serial)
+   return serial
 
 #end
 
