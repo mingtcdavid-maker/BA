@@ -3,10 +3,12 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openpyxl import Workbook
 from io import BytesIO
-from models import BacylinderUpdate, Bacylinder, PendingRequestCreate
+import uuid
+from models import BacylinderUpdate, Bacylinder, PendingRequestCreate, BatchPendingRequestCreate
 from database import (
     createbatable, list_ba, querytable, query_all, create_ba, update_ba,
-    creatependingtable, creatependingba, getpending, list_pending, acceptpending, delete_ba, delete_pending
+    creatependingtable, creatependingba, getpending, list_pending, acceptpending, accept_batch,
+    delete_ba, delete_pending
 )
 # collumns for sql table "logs" in logs.db
 # serial,
@@ -155,6 +157,22 @@ def create_pending(serial: str, request: PendingRequestCreate):
     return {"serial": serial, "location": request.location, "remarks": request.remarks}
 
 
+#batch version: the mobile page lets a user add more serials to the one they
+#scanned, and request the same new location for all of them in one go
+@app.post('/mobile/batch', status_code=201)
+def create_pending_batch(request: BatchPendingRequestCreate):
+    serials = list(dict.fromkeys(request.serials)) #de-dupe, keep first-seen order
+    if len(serials) < 2:
+        raise HTTPException(400, "A batch request needs at least 2 cylinders")
+    missing = [s for s in serials if querytable(TABLENAME, "serial", s) is None]
+    if missing:
+        raise HTTPException(404, f"No cylinder(s) with serial: {', '.join(missing)}")
+    batch_id = str(uuid.uuid4())
+    for s in serials:
+        creatependingba(PENDINGTABLE, s, request.location, request.remarks, batch_id)
+    return {"batch_id": batch_id, "serials": serials, "location": request.location, "remarks": request.remarks}
+
+
 #a tapped NFC tag opens a URL in the phone's browser, which is always a GET -
 #so the tag must land on this page, whose JS then POSTs to /mobile/cylinder/{serial}
 @app.get('/mobile/{serial}')
@@ -188,3 +206,11 @@ def accept_pending(serial: str, status: bool):
     if result is None:
         raise HTTPException(404, "No pending request for this serial")
     return {"serial": serial, "accepted": status}
+
+
+@app.post('/api/accept-batch/{batch_id}')
+def accept_pending_batch(batch_id: str, status: bool):
+    result = accept_batch(TABLENAME, PENDINGTABLE, batch_id, status) #if status True, accept, if status False, reject
+    if result is None:
+        raise HTTPException(404, "No pending batch with this id")
+    return {"batch_id": batch_id, "accepted": status, "serials": [row["serial"] for row in result]}
