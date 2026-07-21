@@ -1,7 +1,8 @@
 import sqlite3
+import os
 from models import Bacylinder, BacylinderUpdate
 
-DATABASE = "logs.db" #constant name of the database file
+DATABASE = os.environ.get("DATABASE_PATH", "logs.db") #overridden by DATABASE_PATH in containerized/Fly deployments, where it points at the persistent volume mount
 
 
 
