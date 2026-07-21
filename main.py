@@ -6,7 +6,7 @@ from io import BytesIO
 from models import BacylinderUpdate, Bacylinder, PendingRequestCreate
 from database import (
     createbatable, list_ba, querytable, query_all, create_ba, update_ba,
-    creatependingtable, creatependingba, getpending, list_pending, acceptpending, delete_ba
+    creatependingtable, creatependingba, getpending, list_pending, acceptpending, delete_ba, delete_pending
 )
 # collumns for sql table "logs" in logs.db
 # serial,
@@ -136,10 +136,11 @@ def updateba(serial: str, updatedba: BacylinderUpdate):
 
 @app.delete('/api/cylinder/{serial}')
 def deleteba(serial:str):
-   if querytable(TABLENAME, "serial", serial) is None:
-       raise HTTPException(404, "Item not found")
-   delete_ba(TABLENAME, serial)
-   return serial
+    if querytable(TABLENAME, "serial", serial) is None:
+        raise HTTPException(404, "Item not found")
+    delete_ba(TABLENAME, serial)
+    delete_pending(PENDINGTABLE, serial) #drop any outstanding NFC request so it doesn't reference a deleted cylinder
+    return serial
 
 #end
 

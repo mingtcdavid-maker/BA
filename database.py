@@ -103,15 +103,22 @@ def update_ba(table_name: str, ba_update_object: BacylinderUpdate, serial: str):
     conn.close()
 
 def delete_ba(table_name:str, serial:str):
-   conn = getconnection()
-   c = conn.cursor()
-   sql = f"""
-   DELETE FROM {table_name} WHERE serial = ?
-   """
-   c.execute(sql, (serial,))
-   c.commit()
-   c.close()
-   return serial
+    conn = getconnection()
+    c = conn.cursor()
+    sql = f"""
+    DELETE FROM {table_name} WHERE serial = ?
+    """
+    c.execute(sql, (serial,))
+    conn.commit()
+    conn.close()
+    return serial
+
+def delete_pending(table_name: str, serial: str):
+    conn = getconnection()
+    c = conn.cursor()
+    c.execute(f"DELETE FROM {table_name} WHERE serial = ?", (serial,))
+    conn.commit()
+    conn.close()
 
 
 def creatependingtable(table_name: str):
