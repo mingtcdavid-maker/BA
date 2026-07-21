@@ -129,10 +129,16 @@ def creatependingtable(table_name: str):
     CREATE TABLE IF NOT EXISTS {table_name} (
     serial text PRIMARY KEY,
     location text,
-    remarks text
+    remarks text,
+    batch_id text
     )
     """
     c.execute(sql)
+    #self-heal tables created before batch_id existed
+    c.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in c.fetchall()]
+    if "batch_id" not in columns:
+        c.execute(f"ALTER TABLE {table_name} ADD COLUMN batch_id text")
     conn.commit()
     conn.close()
 
@@ -145,16 +151,16 @@ def list_pending(table_name: str):
     conn.close()
     return [dict(row) for row in rows]
 
-def creatependingba(table_name: str, serial: str, new_location: str, remarks: str = None):
+def creatependingba(table_name: str, serial: str, new_location: str, remarks: str = None, batch_id: str = None):
     conn = getconnection()
     c = conn.cursor()
     #re-scanning the same tag replaces its previous pending request rather than erroring
     sql = f"""
-    INSERT INTO {table_name} (serial, location, remarks)
-    VALUES (?, ?, ?)
-    ON CONFLICT(serial) DO UPDATE SET location = excluded.location, remarks = excluded.remarks
+    INSERT INTO {table_name} (serial, location, remarks, batch_id)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(serial) DO UPDATE SET location = excluded.location, remarks = excluded.remarks, batch_id = excluded.batch_id
     """
-    c.execute(sql, (serial, new_location, remarks))
+    c.execute(sql, (serial, new_location, remarks, batch_id))
     conn.commit()
     conn.close()
 
@@ -187,3 +193,20 @@ def acceptpending(cylinder_table: str, pending_table: str, serial: str, status: 
     conn.commit()
     conn.close()
     return pending
+
+def accept_batch(cylinder_table: str, pending_table: str, batch_id: str, status: bool):
+    conn = getconnection()
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM {pending_table} WHERE batch_id = ?", (batch_id,))
+    rows = [dict(row) for row in c.fetchall()]
+    if not rows:
+        conn.close()
+        return None
+    if status: #accept: apply the requested location to every cylinder in the batch
+        for row in rows:
+            c.execute(f"UPDATE {cylinder_table} SET location = ? WHERE serial = ?", (row["location"], row["serial"]))
+    c.execute(f"DELETE FROM {pending_table} WHERE batch_id = ?", (batch_id,))
+    conn.commit()
+    conn.close()
+    return rows

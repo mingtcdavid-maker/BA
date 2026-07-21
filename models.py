@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 class Bacylinder(BaseModel): # base model used for creating ba objects
     serial: str
@@ -23,5 +23,11 @@ class BacylinderUpdate(BaseModel): #updater model for updating using patch
 
 
 class PendingRequestCreate(BaseModel): # body for /mobile/cylinder/{serial}
+    location: str
+    remarks: Optional[str] = None
+
+
+class BatchPendingRequestCreate(BaseModel): # body for /mobile/batch
+    serials: List[str]
     location: str
     remarks: Optional[str] = None

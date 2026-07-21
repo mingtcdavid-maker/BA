@@ -231,6 +231,19 @@
   .modal.modal-danger .btn-primary { background: var(--critical); }
 
   .row-actions { display: flex; gap: 8px; }
+  .batch-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 5px;
+    padding: 2px 6px;
+    margin-bottom: 4px;
+  }
+  .batch-serials { color: var(--text-secondary); font-size: 13px; }
   .btn-accept, .btn-reject {
     border-radius: 6px;
     padding: 5px 11px;
@@ -491,14 +504,22 @@ async function loadCylinders() {
   render();
 }
 
-async function loadPending() {
-  const res = await fetch('/api/pending');
-  const pending = await res.json();
+function groupPending(pending) {
+  const singles = [];
+  const batchesByID = new Map();
+  for (const p of pending) {
+    if (p.batch_id) {
+      if (!batchesByID.has(p.batch_id)) batchesByID.set(p.batch_id, []);
+      batchesByID.get(p.batch_id).push(p);
+    } else {
+      singles.push(p);
+    }
+  }
+  return { singles, batches: [...batchesByID.values()] };
+}
 
-  pendingCount.textContent = pending.length;
-  pendingCount.hidden = pending.length === 0;
-
-  pendingBody.innerHTML = pending.map(p => `
+function singleRowHtml(p) {
+  return `
     <tr>
       <td class="serial">${escapeHtml(p.serial)}</td>
       <td>${escapeHtml(p.location)}</td>
@@ -510,7 +531,40 @@ async function loadPending() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+}
+
+function batchRowHtml(group) {
+  const batchId = group[0].batch_id;
+  const location = group[0].location;
+  const remarks = group[0].remarks;
+  return `
+    <tr>
+      <td>
+        <span class="batch-badge">Batch · ${group.length} cylinders</span>
+        <div class="batch-serials">${group.map(p => escapeHtml(p.serial)).join(', ')}</div>
+      </td>
+      <td>${escapeHtml(location)}</td>
+      <td>${escapeHtml(remarks) || '—'}</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn-accept" data-batch-id="${escapeHtml(batchId)}" data-action="accept">Accept all</button>
+          <button class="btn-reject" data-batch-id="${escapeHtml(batchId)}" data-action="reject">Reject all</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+async function loadPending() {
+  const res = await fetch('/api/pending');
+  const pending = await res.json();
+
+  pendingCount.textContent = pending.length;
+  pendingCount.hidden = pending.length === 0;
+
+  const { singles, batches } = groupPending(pending);
+  pendingBody.innerHTML = batches.map(batchRowHtml).join('') + singles.map(singleRowHtml).join('');
 
   pendingEmptyState.hidden = pending.length !== 0;
 }
@@ -701,16 +755,17 @@ pendingBody.addEventListener('click', async (e) => {
   if (!btn) return;
   btn.disabled = true;
   const accepted = btn.dataset.action === 'accept';
+  const url = btn.dataset.batchId
+    ? `/api/accept-batch/${encodeURIComponent(btn.dataset.batchId)}?status=${accepted}`
+    : `/api/accept/${encodeURIComponent(btn.dataset.serial)}?status=${accepted}`;
   try {
-    const res = await fetch(`/api/accept/${encodeURIComponent(btn.dataset.serial)}?status=${accepted}`, {
-      method: 'POST',
-    });
+    const res = await fetch(url, { method: 'POST' });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Request failed (${res.status})`);
     }
     await loadPending();
-    if (accepted) await loadCylinders(); // location may have changed
+    if (accepted) await loadCylinders(); // location(s) may have changed
   } catch (err) {
     alert(err.message);
     btn.disabled = false;
