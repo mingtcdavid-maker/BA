@@ -1,12 +1,14 @@
+import csv
 import sys
-from database import createbatable, creatependingtable, set_station, truncate_dates_to_month
+from database import createbatable, creatependingtable, set_station, truncate_dates_to_month, import_rows
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("createtable", "createpending", "setstation", "stripdays"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("createtable", "createpending", "setstation", "stripdays", "importcsv"):
         print("Usage: python3 manage.py createtable <table_name>")
         print("       python3 manage.py createpending")
         print("       python3 manage.py setstation <table_name> <serial> <station>")
         print("       python3 manage.py stripdays <table_name>")
+        print("       python3 manage.py importcsv <table_name> <csv_path> [--replace]")
         return
     if sys.argv[1] == "createtable":
         if len(sys.argv) < 3:
@@ -31,6 +33,19 @@ def main():
             return
         truncate_dates_to_month(sys.argv[2])
         print(f"Dates truncated to year-month in table '{sys.argv[2]}'.")
+    elif sys.argv[1] == "importcsv":
+        #bulk-load/replace cylinder rows from a CSV with columns: serial,station,location,next_hydrostatic_date,manufacture_date,last_servicing_date,date_of_expiry,remarks,servicing
+        if len(sys.argv) < 4:
+            print("Usage: python3 manage.py importcsv <table_name> <csv_path> [--replace]")
+            return
+        table_name, csv_path = sys.argv[2], sys.argv[3]
+        replace_all = "--replace" in sys.argv[4:]
+        with open(csv_path, newline="") as f:
+            rows = list(csv.DictReader(f))
+        for row in rows:
+            row["servicing"] = row.get("servicing", "").strip().lower() in ("1", "true", "yes")
+        import_rows(table_name, rows, replace_all=replace_all)
+        print(f"Imported {len(rows)} row(s) into '{table_name}'" + (" (existing rows replaced first)" if replace_all else " (upserted by serial)") + ".")
 
 
 if __name__ == "__main__":
