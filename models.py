@@ -10,6 +10,7 @@ class Bacylinder(BaseModel): # represents a stored row; station is optional here
     last_servicing_date: str
     date_of_expiry: str
     remarks: str
+    servicing: bool = False # true once a user has flagged this overdue cylinder as sent for servicing
 
 
 class BacylinderCreate(BaseModel): # body for POST /api/cylinder - station is required so no new cylinder is ever created without one
