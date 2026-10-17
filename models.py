@@ -1,8 +1,20 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
-class Bacylinder(BaseModel): # base model used for creating ba objects
+class Bacylinder(BaseModel): # represents a stored row; station is optional here only so rows created before the column existed still parse
     serial: str
+    station: Optional[str] = None
+    location: str
+    next_hydrostatic_date: str
+    manufacture_date: str
+    last_servicing_date: str
+    date_of_expiry: str
+    remarks: str
+
+
+class BacylinderCreate(BaseModel): # body for POST /api/cylinder - station is required so no new cylinder is ever created without one
+    serial: str
+    station: str
     location: str
     next_hydrostatic_date: str
     manufacture_date: str
@@ -13,6 +25,8 @@ class Bacylinder(BaseModel): # base model used for creating ba objects
 
 
 class BacylinderUpdate(BaseModel): #updater model for updating using patch
+    model_config = ConfigDict(extra="forbid") # a "station" key in a PATCH body must error, not be silently dropped
+
     serial: Optional[str] = None
     location: Optional[str] = None
     next_hydrostatic_date: Optional[str] = None

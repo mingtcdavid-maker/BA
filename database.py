@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from models import Bacylinder, BacylinderUpdate
+from models import Bacylinder, BacylinderCreate, BacylinderUpdate
 
 DATABASE = os.environ.get("DATABASE_PATH", "logs.db") #overridden by DATABASE_PATH in containerized/Fly deployments, where it points at the persistent volume mount
 
@@ -15,6 +15,7 @@ def createbatable(table_name: str):
     sql = f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
     serial text PRIMARY KEY,
+    station text,
     location text,
     next_hydrostatic_date text,
     last_servicing_date text,
@@ -24,6 +25,11 @@ def createbatable(table_name: str):
     )
     """
     c.execute(sql)
+    #self-heal tables created before station existed
+    c.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in c.fetchall()]
+    if "station" not in columns:
+        c.execute(f"ALTER TABLE {table_name} ADD COLUMN station text")
     conn.commit()
     conn.close()
 
@@ -60,13 +66,14 @@ def query_all(table_name: str, parameter_to_be_queried: str, parameter: str):
     conn.close()
     return [Bacylinder.model_validate(dict(row)) for row in rows]
 
-def create_ba(table_name: str, ba_object: Bacylinder):
+def create_ba(table_name: str, ba_object: BacylinderCreate):
     conn = getconnection()
     c=conn.cursor()
     sql = f"""
     INSERT INTO {table_name}
     (
     serial,
+    station,
     location,
     next_hydrostatic_date,
     last_servicing_date,
@@ -74,12 +81,13 @@ def create_ba(table_name: str, ba_object: Bacylinder):
     manufacture_date,
     remarks
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """
     c.execute(
         sql,
         (
             ba_object.serial,
+            ba_object.station,
             ba_object.location,
             ba_object.next_hydrostatic_date,
             ba_object.last_servicing_date,
@@ -95,11 +103,21 @@ def update_ba(table_name: str, ba_update_object: BacylinderUpdate, serial: str):
     conn = getconnection()
     c = conn.cursor()
     for key, value in ba_update_object.model_dump(exclude_unset=True).items():
+        if key == "station": #station is immutable once set; never reachable via BacylinderUpdate, kept as a hard backstop
+            continue
         sql = f"UPDATE {table_name} SET {key} = ? WHERE serial = ?"
         c.execute(
             sql, (value, serial)
         )
 
+    conn.commit()
+    conn.close()
+
+def set_station(table_name: str, serial: str, station: str):
+    #admin-only backfill for rows created before station existed - never exposed over HTTP
+    conn = getconnection()
+    c = conn.cursor()
+    c.execute(f"UPDATE {table_name} SET station = ? WHERE serial = ?", (station, serial))
     conn.commit()
     conn.close()
 

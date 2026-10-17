@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from openpyxl import Workbook
 from io import BytesIO
 import uuid
-from models import BacylinderUpdate, Bacylinder, PendingRequestCreate, BatchPendingRequestCreate
+from models import BacylinderUpdate, Bacylinder, BacylinderCreate, PendingRequestCreate, BatchPendingRequestCreate
 from database import (
     createbatable, list_ba, querytable, query_all, create_ba, update_ba,
     creatependingtable, creatependingba, getpending, list_pending, acceptpending, accept_batch,
@@ -12,6 +12,7 @@ from database import (
 )
 # collumns for sql table "logs" in logs.db
 # serial,
+# station, # which station the cylinder is from, e.g. "23" - set once at creation, never editable via the API afterward
 # location,
 # next_hydrostatic_date,
 # last_servicing_date,
@@ -35,7 +36,7 @@ def root():
 
 
 @app.post('/api/cylinder', status_code=201)
-def createba(ba: Bacylinder):
+def createba(ba: BacylinderCreate):
     if querytable(TABLENAME, "serial", ba.serial) is not None:
         raise HTTPException(400, f"Cylinder with serial {ba.serial} already exists")
     create_ba(TABLENAME, ba)
@@ -45,6 +46,7 @@ def createba(ba: Bacylinder):
 @app.get('/api/cylinder')
 def getba(
     cylinder_serial: str = None,
+    station: str = None,
     location: str = None,
     manufacture_date: str = None,
     next_hydrostatic_date: str = None,
@@ -56,6 +58,12 @@ def getba(
         if cylinder is None:
             raise HTTPException(404, "Item not found")
         return cylinder
+
+    if station:
+        result = query_all(TABLENAME, "station", station)
+        if not result:
+            raise HTTPException(404, "Item not found")
+        return result
 
     if location:
         result = query_all(TABLENAME, "location", location)
@@ -92,6 +100,7 @@ def getba(
 
 EXPORT_COLUMNS = [
     "serial",
+    "station",
     "location",
     "manufacture_date",
     "next_hydrostatic_date",
@@ -101,6 +110,7 @@ EXPORT_COLUMNS = [
 ]
 EXPORT_HEADERS = [
     "Serial",
+    "Station",
     "Appliance",
     "Manufacture date",
     "Next hydrostatic test",

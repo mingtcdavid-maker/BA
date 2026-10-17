@@ -176,6 +176,7 @@
   <section id="formSection" hidden>
     <div class="card">
       <div class="row"><span class="k">Serial</span><span class="v" id="infoSerial"></span></div>
+      <div class="row"><span class="k">Station</span><span class="v" id="infoStation"></span></div>
       <div class="row"><span class="k">Current appliance</span><span class="v" id="infoLocation"></span></div>
       <div class="row"><span class="k">Next hydrostatic test</span><span class="v" id="infoHydro"></span></div>
     </div>
@@ -274,6 +275,7 @@ async function loadCylinder(serial) {
     }
     const cylinder = await res.json();
     document.getElementById('infoSerial').textContent = cylinder.serial;
+    document.getElementById('infoStation').textContent = cylinder.station || '—';
     document.getElementById('infoLocation').textContent = cylinder.location;
     document.getElementById('infoHydro').textContent = cylinder.next_hydrostatic_date || '—';
     document.getElementById('newLocation').value = cylinder.location;
