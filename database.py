@@ -121,6 +121,21 @@ def set_station(table_name: str, serial: str, station: str):
     conn.commit()
     conn.close()
 
+def truncate_dates_to_month(table_name: str):
+    #one-time cleanup for rows stored as YYYY-MM-DD before dates became year-month only; never exposed over HTTP
+    conn = getconnection()
+    c = conn.cursor()
+    sql = f"""
+    UPDATE {table_name} SET
+    manufacture_date = substr(manufacture_date, 1, 7),
+    next_hydrostatic_date = substr(next_hydrostatic_date, 1, 7),
+    last_servicing_date = substr(last_servicing_date, 1, 7),
+    date_of_expiry = substr(date_of_expiry, 1, 7)
+    """
+    c.execute(sql)
+    conn.commit()
+    conn.close()
+
 def delete_ba(table_name:str, serial:str):
     conn = getconnection()
     c = conn.cursor()
