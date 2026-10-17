@@ -331,7 +331,7 @@
     <section class="kpi-row" id="kpiRow"></section>
 
     <div class="toolbar">
-      <input type="search" id="searchInput" placeholder="Search by serial, appliance, or status…">
+      <input type="search" id="searchInput" placeholder="Search by serial, station, appliance, or status…">
       <a class="btn-secondary" id="exportBtn" href="/export">Export to Excel</a>
       <button class="btn-primary" id="addBtn">+ Add cylinder</button>
     </div>
@@ -341,6 +341,7 @@
         <thead>
           <tr>
             <th>Serial</th>
+            <th class="sortable" data-sort-key="station">Station <span class="sort-arrow" data-arrow-for="station"></span></th>
             <th class="sortable" data-sort-key="location">Appliance <span class="sort-arrow" data-arrow-for="location"></span></th>
             <th class="sortable" data-sort-key="manufacture_date">Manufacture date <span class="sort-arrow" data-arrow-for="manufacture_date"></span></th>
             <th class="sortable" data-sort-key="next_hydrostatic_date">Next hydrostatic test <span class="sort-arrow" data-arrow-for="next_hydrostatic_date"></span></th>
@@ -382,6 +383,10 @@
       <div class="field">
         <label for="f-serial">Serial</label>
         <input id="f-serial" name="serial" required>
+      </div>
+      <div class="field">
+        <label for="f-station">Station</label>
+        <input id="f-station" name="station" required>
       </div>
       <div class="field">
         <label for="f-location">Appliance</label>
@@ -450,6 +455,7 @@ const modalTitle = document.getElementById('modalTitle');
 const cylinderForm = document.getElementById('cylinderForm');
 const formError = document.getElementById('formError');
 const serialField = document.getElementById('f-serial');
+const stationField = document.getElementById('f-station');
 const sortableHeaders = document.querySelectorAll('th.sortable');
 const deleteModalBackdrop = document.getElementById('deleteModalBackdrop');
 const deleteModalSerial = document.getElementById('deleteModalSerial');
@@ -494,6 +500,7 @@ function applianceRank(location) {
 function sortValueOf(cylinder, key) {
   if (key === 'status') return STATUS_RANK[statusOf(cylinder)];
   if (key === 'location') return applianceRank(cylinder.location);
+  if (key === 'station') return cylinder.station || '';
   if (DATE_COLUMNS.has(key)) return cylinder[key] || ''; // ISO dates sort correctly as strings
   return '';
 }
@@ -582,6 +589,7 @@ function render() {
   const query = searchInput.value.trim().toLowerCase();
   const filtered = cylinders.filter(c =>
     c.serial.toLowerCase().includes(query) ||
+    (c.station || '').toLowerCase().includes(query) ||
     c.location.toLowerCase().includes(query) ||
     statusLabel(statusOf(c)).toLowerCase().includes(query)
   );
@@ -633,6 +641,7 @@ function render() {
     return `
       <tr>
         <td class="serial">${escapeHtml(c.serial)}</td>
+        <td>${escapeHtml(c.station) || '—'}</td>
         <td>${escapeHtml(c.location)}</td>
         <td class="mono">${escapeHtml(c.manufacture_date) || '—'}</td>
         <td class="mono">${escapeHtml(c.next_hydrostatic_date) || '—'}</td>
@@ -667,6 +676,8 @@ function openModal(mode, cylinder) {
     modalTitle.textContent = `Edit ${cylinder.serial}`;
     serialField.value = cylinder.serial;
     serialField.readOnly = true;
+    stationField.value = cylinder.station || '';
+    stationField.readOnly = true; // station is locked once a cylinder is created
     document.getElementById('f-location').value = cylinder.location;
     document.getElementById('f-manufacture').value = cylinder.manufacture_date;
     document.getElementById('f-hydro').value = cylinder.next_hydrostatic_date;
@@ -677,6 +688,7 @@ function openModal(mode, cylinder) {
     editingSerial = null;
     modalTitle.textContent = 'Add cylinder';
     serialField.readOnly = false;
+    stationField.readOnly = false;
   }
   modalBackdrop.hidden = false;
   serialField.focus();
