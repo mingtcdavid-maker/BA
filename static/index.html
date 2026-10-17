@@ -394,19 +394,19 @@
       </div>
       <div class="field">
         <label for="f-manufacture">Manufacture date</label>
-        <input id="f-manufacture" name="manufacture_date" type="month" required>
+        <input id="f-manufacture" name="manufacture_date" type="date" required>
       </div>
       <div class="field">
         <label for="f-hydro">Next hydrostatic test</label>
-        <input id="f-hydro" name="next_hydrostatic_date" type="month" required>
+        <input id="f-hydro" name="next_hydrostatic_date" type="date" required>
       </div>
       <div class="field">
         <label for="f-service">Last servicing date</label>
-        <input id="f-service" name="last_servicing_date" type="month" required>
+        <input id="f-service" name="last_servicing_date" type="date" required>
       </div>
       <div class="field">
         <label for="f-expiry">Date of expiry</label>
-        <input id="f-expiry" name="date_of_expiry" type="month" required>
+        <input id="f-expiry" name="date_of_expiry" type="date" required>
       </div>
       <div class="field">
         <label for="f-remarks">Remarks</label>
@@ -668,6 +668,11 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// stored dates are YYYY-MM; a date input needs YYYY-MM-DD to display a value, so pad with a day
+function toDateInputValue(yearMonth) {
+  return yearMonth ? `${yearMonth}-01` : '';
+}
+
 function openModal(mode, cylinder) {
   formError.textContent = '';
   cylinderForm.reset();
@@ -679,10 +684,10 @@ function openModal(mode, cylinder) {
     stationField.value = cylinder.station || '';
     stationField.readOnly = true; // station is locked once a cylinder is created
     document.getElementById('f-location').value = cylinder.location;
-    document.getElementById('f-manufacture').value = cylinder.manufacture_date;
-    document.getElementById('f-hydro').value = cylinder.next_hydrostatic_date;
-    document.getElementById('f-service').value = cylinder.last_servicing_date || '';
-    document.getElementById('f-expiry').value = cylinder.date_of_expiry || '';
+    document.getElementById('f-manufacture').value = toDateInputValue(cylinder.manufacture_date);
+    document.getElementById('f-hydro').value = toDateInputValue(cylinder.next_hydrostatic_date);
+    document.getElementById('f-service').value = toDateInputValue(cylinder.last_servicing_date);
+    document.getElementById('f-expiry').value = toDateInputValue(cylinder.date_of_expiry);
     document.getElementById('f-remarks').value = cylinder.remarks || '';
   } else {
     editingSerial = null;
@@ -788,6 +793,10 @@ cylinderForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   formError.textContent = '';
   const data = Object.fromEntries(new FormData(cylinderForm).entries());
+  // the date inputs give YYYY-MM-DD; drop the day before it's stored
+  for (const key of ['manufacture_date', 'next_hydrostatic_date', 'last_servicing_date', 'date_of_expiry']) {
+    if (data[key]) data[key] = data[key].slice(0, 7);
+  }
 
   try {
     let res;
