@@ -125,6 +125,38 @@ def set_station(table_name: str, serial: str, station: str):
     conn.commit()
     conn.close()
 
+def import_rows(table_name: str, rows, replace_all: bool = False):
+    #bulk-loads parsed rows (e.g. from a masterlist CSV) - upserts by serial, or wipes the table first when replace_all
+    createbatable(table_name) #make sure the table/columns exist even if this runs before the app has started
+    conn = getconnection()
+    c = conn.cursor()
+    if replace_all:
+        c.execute(f"DELETE FROM {table_name}")
+    for row in rows:
+        c.execute(
+            f"""
+            INSERT INTO {table_name}
+            (serial, station, location, next_hydrostatic_date, last_servicing_date, date_of_expiry, manufacture_date, remarks, servicing)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(serial) DO UPDATE SET
+                station = excluded.station,
+                location = excluded.location,
+                next_hydrostatic_date = excluded.next_hydrostatic_date,
+                last_servicing_date = excluded.last_servicing_date,
+                date_of_expiry = excluded.date_of_expiry,
+                manufacture_date = excluded.manufacture_date,
+                remarks = excluded.remarks,
+                servicing = excluded.servicing
+            """,
+            (
+                row["serial"], row["station"], row["location"],
+                row["next_hydrostatic_date"], row["last_servicing_date"], row["date_of_expiry"],
+                row["manufacture_date"], row["remarks"], 1 if row["servicing"] else 0
+            )
+        )
+    conn.commit()
+    conn.close()
+
 def set_servicing(table_name: str, serial: str, servicing: bool):
     conn = getconnection()
     c = conn.cursor()
