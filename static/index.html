@@ -16,6 +16,7 @@
     --good:           #0ca30c;
     --warning:        #fab219;
     --critical:       #d03b3b;
+    --servicing:      #7c3aed;
     --accent:         #2a78d6;
     --accent-ink:     #ffffff;
   }
@@ -31,6 +32,7 @@
       --good:           #0ca30c;
       --warning:        #fab219;
       --critical:       #e66767;
+      --servicing:      #a78bfa;
       --accent:         #3987e5;
       --accent-ink:     #0b0b0b;
     }
@@ -73,6 +75,7 @@
   .stat-tile.status-good .label .dot { background: var(--good); }
   .stat-tile.status-warning .label .dot { background: var(--warning); }
   .stat-tile.status-critical .label .dot { background: var(--critical); }
+  .stat-tile.status-servicing .label .dot { background: var(--servicing); }
   .stat-tile .value {
     font-size: 28px;
     font-weight: 600;
@@ -214,7 +217,15 @@
   .badge.status-good .dot { background: var(--good); }
   .badge.status-warning .dot { background: var(--warning); }
   .badge.status-critical .dot { background: var(--critical); }
+  .badge.status-servicing .dot { background: var(--servicing); }
   .badge .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+
+  .badge.toggleable {
+    cursor: pointer;
+    border: none;
+    font: inherit;
+  }
+  .badge.toggleable:hover { opacity: 0.8; }
 
   .row-edit, .row-delete {
     background: transparent;
@@ -437,7 +448,7 @@
 
 <script>
 const DUE_SOON_DAYS = 90;
-const STATUS_RANK = { critical: 0, warning: 1, good: 2 };
+const STATUS_RANK = { critical: 0, servicing: 1, warning: 2, good: 3 };
 const APPLIANCE_ORDER = ['PL231', 'PL232', 'LF231E', 'CPL231', 'OST231', 'HSV231', 'FP231', 'FT231', 'Store Spares'];
 const DATE_COLUMNS = new Set(['manufacture_date', 'next_hydrostatic_date', 'last_servicing_date', 'date_of_expiry']);
 
@@ -478,6 +489,7 @@ function daysUntil(dateStr) {
 }
 
 function statusOf(cylinder) {
+  if (cylinder.servicing) return 'servicing'; // manual override: stays until a user flips it back, regardless of the date
   const days = daysUntil(cylinder.next_hydrostatic_date);
   if (days < 0) return 'critical';
   if (days <= DUE_SOON_DAYS) return 'warning';
@@ -485,11 +497,17 @@ function statusOf(cylinder) {
 }
 
 function statusLabel(status) {
-  return { good: 'OK', warning: 'Due soon', critical: 'Overdue' }[status];
+  return { good: 'OK', warning: 'Due soon', critical: 'Overdue', servicing: 'Servicing' }[status];
 }
 
-function badgeHtml(status) {
-  return `<span class="badge status-${status}"><span class="dot"></span>${statusLabel(status)}</span>`;
+// overdue and servicing badges double as a toggle button; OK/due-soon stay plain labels
+function badgeHtml(status, serial) {
+  const label = statusLabel(status);
+  if (status === 'critical' || status === 'servicing') {
+    const nextAction = status === 'critical' ? 'mark as sent for servicing' : 'mark back as overdue';
+    return `<button type="button" class="badge status-${status} toggleable" data-serial="${escapeHtml(serial)}" title="Click to ${nextAction}"><span class="dot"></span>${label}</button>`;
+  }
+  return `<span class="badge status-${status}"><span class="dot"></span>${label}</span>`;
 }
 
 function applianceRank(location) {
@@ -614,7 +632,7 @@ function render() {
     }
   });
 
-  const counts = { good: 0, warning: 0, critical: 0 };
+  const counts = { good: 0, warning: 0, critical: 0, servicing: 0 };
   for (const c of cylinders) counts[statusOf(c)]++;
 
   kpiRow.innerHTML = `
@@ -634,6 +652,10 @@ function render() {
       <div class="label">Overdue</div>
       <div class="value">${counts.critical}</div>
     </div>
+    <div class="stat-tile status-servicing">
+      <div class="label">In servicing</div>
+      <div class="value">${counts.servicing}</div>
+    </div>
   `;
 
   tableBody.innerHTML = filtered.map(c => {
@@ -648,7 +670,7 @@ function render() {
         <td class="mono">${escapeHtml(c.last_servicing_date) || '—'}</td>
         <td class="mono">${escapeHtml(c.date_of_expiry) || '—'}</td>
         <td>${escapeHtml(c.remarks) || '—'}</td>
-        <td>${badgeHtml(status)}</td>
+        <td>${badgeHtml(status, c.serial)}</td>
         <td>
           <div class="row-actions">
             <button class="row-edit" data-serial="${escapeHtml(c.serial)}">Edit</button>
@@ -739,8 +761,32 @@ tableBody.addEventListener('click', (e) => {
   const deleteBtn = e.target.closest('.row-delete');
   if (deleteBtn) {
     openDeleteModal(deleteBtn.dataset.serial);
+    return;
+  }
+  const badge = e.target.closest('.badge.toggleable');
+  if (badge) {
+    toggleServicing(badge.dataset.serial, badge);
   }
 });
+
+async function toggleServicing(serial, badge) {
+  const cylinder = cylinders.find(c => c.serial === serial);
+  if (!cylinder) return;
+  const next = !cylinder.servicing;
+  badge.disabled = true;
+  try {
+    const res = await fetch(`/api/cylinder/${encodeURIComponent(serial)}/servicing?servicing=${next}`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Request failed (${res.status})`);
+    }
+    cylinder.servicing = next;
+    render();
+  } catch (err) {
+    alert(err.message);
+    badge.disabled = false;
+  }
+}
 
 document.getElementById('deleteCancelBtn').addEventListener('click', closeDeleteModal);
 deleteModalBackdrop.addEventListener('click', (e) => { if (e.target === deleteModalBackdrop) closeDeleteModal(); });

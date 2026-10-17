@@ -8,7 +8,7 @@ from models import BacylinderUpdate, Bacylinder, BacylinderCreate, PendingReques
 from database import (
     createbatable, list_ba, querytable, query_all, create_ba, update_ba,
     creatependingtable, creatependingba, getpending, list_pending, acceptpending, accept_batch,
-    delete_ba, delete_pending
+    delete_ba, delete_pending, set_servicing
 )
 # collumns for sql table "logs" in logs.db
 # serial,
@@ -18,7 +18,8 @@ from database import (
 # last_servicing_date,
 # date_of_expiry,
 # manufacture_date,
-# remarks
+# remarks,
+# servicing, # true once a user has flagged this overdue cylinder as sent for servicing - toggled via POST /api/cylinder/{serial}/servicing
 
 
 TABLENAME = "logs" #currently hardcoding a table to be used, logs for all fastapi testing
@@ -107,6 +108,7 @@ EXPORT_COLUMNS = [
     "last_servicing_date",
     "date_of_expiry",
     "remarks",
+    "servicing",
 ]
 EXPORT_HEADERS = [
     "Serial",
@@ -117,6 +119,7 @@ EXPORT_HEADERS = [
     "Last servicing date",
     "Date of expiry",
     "Remarks",
+    "Sent for servicing",
 ]
 
 
@@ -128,6 +131,7 @@ def export_excel():
     ws.append(EXPORT_HEADERS)
     for cylinder in list_ba(TABLENAME):
         row = cylinder.model_dump()
+        row["servicing"] = "Yes" if row["servicing"] else "No"
         ws.append([row.get(col, "") for col in EXPORT_COLUMNS])
     buf = BytesIO()
     wb.save(buf)
@@ -153,6 +157,15 @@ def deleteba(serial:str):
     delete_ba(TABLENAME, serial)
     delete_pending(PENDINGTABLE, serial) #drop any outstanding NFC request so it doesn't reference a deleted cylinder
     return serial
+
+
+#toggled from the dashboard by clicking an "Overdue"/"Servicing" badge - tracks that an overdue cylinder was sent off, independent of its hydrostatic date
+@app.post('/api/cylinder/{serial}/servicing')
+def set_cylinder_servicing(serial: str, servicing: bool):
+    if querytable(TABLENAME, "serial", serial) is None:
+        raise HTTPException(404, "Item not found")
+    set_servicing(TABLENAME, serial, servicing)
+    return querytable(TABLENAME, "serial", serial)
 
 #end
 

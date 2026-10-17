@@ -21,15 +21,18 @@ def createbatable(table_name: str):
     last_servicing_date text,
     date_of_expiry text,
     manufacture_date text,
-    remarks text
+    remarks text,
+    servicing integer DEFAULT 0
     )
     """
     c.execute(sql)
-    #self-heal tables created before station existed
+    #self-heal tables created before station/servicing existed
     c.execute(f"PRAGMA table_info({table_name})")
     columns = [row[1] for row in c.fetchall()]
     if "station" not in columns:
         c.execute(f"ALTER TABLE {table_name} ADD COLUMN station text")
+    if "servicing" not in columns:
+        c.execute(f"ALTER TABLE {table_name} ADD COLUMN servicing integer DEFAULT 0")
     conn.commit()
     conn.close()
 
@@ -79,9 +82,10 @@ def create_ba(table_name: str, ba_object: BacylinderCreate):
     last_servicing_date,
     date_of_expiry,
     manufacture_date,
-    remarks
+    remarks,
+    servicing
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
     """
     c.execute(
         sql,
@@ -118,6 +122,13 @@ def set_station(table_name: str, serial: str, station: str):
     conn = getconnection()
     c = conn.cursor()
     c.execute(f"UPDATE {table_name} SET station = ? WHERE serial = ?", (station, serial))
+    conn.commit()
+    conn.close()
+
+def set_servicing(table_name: str, serial: str, servicing: bool):
+    conn = getconnection()
+    c = conn.cursor()
+    c.execute(f"UPDATE {table_name} SET servicing = ? WHERE serial = ?", (1 if servicing else 0, serial))
     conn.commit()
     conn.close()
 
